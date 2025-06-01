@@ -1,32 +1,172 @@
-# Prerequisites
-*.d
+##################################
+# General
+##################################
+# Sistema operativo
+.DS_Store
+Thumbs.db
+ehthumbs.db
+desktop.ini
 
-# Compiled Object files
-*.slo
-*.lo
-*.o
+# Archivos temporales
+*.tmp
+*.bak
+*.swp
+*.swo
+*.old
+
+# Archivos de logs
+*.log
+*.out
+*.trace
+
+# Archivos de copia o respaldo
+*~
+~*
+
+##################################
+# Compilación C / C++
+##################################
 *.obj
-
-# Precompiled Headers
-*.gch
-*.pch
-
-# Compiled Dynamic libraries
-*.so
-*.dylib
-*.dll
-
-# Fortran module files
-*.mod
-*.smod
-
-# Compiled Static libraries
-*.lai
-*.la
+*.o
 *.a
 *.lib
-
-# Executables
+*.so
+*.dll
 *.exe
 *.out
-*.app
+*.elf
+*.hex
+*.bin
+*.d
+*.map
+
+# Archivos de depuración
+*.dSYM/
+*.dmp
+*.core
+*.gch
+
+# Directorios de build
+build/
+Build/
+bin/
+Bin/
+dist/
+Debug/
+Release/
+
+##################################
+# Linux
+##################################
+*~
+.nfs*
+
+##################################
+# Windows
+##################################
+*.pdb
+*.idb
+*.ilk
+*.aps
+*.ncb
+*.suo
+*.user
+*.vcxproj.user
+*.opensdf
+*.sdf
+*.log
+
+##################################
+# Visual Studio Code
+##################################
+.vscode/
+*.code-workspace
+
+##################################
+# SolidWorks
+##################################
+*.SLDASM
+*.SLDPRT
+*.SLDDRW
+*.SLDDRT
+*.SWB
+*.SWP
+*.sld*
+~$*
+
+# Archivos temporales de SW
+*.bak
+*Copy*
+~*.*
+._*
+
+##################################
+# KiCad
+##################################
+*.bak
+*.kicad_pcb-bak
+*.tmp
+*.sch-bak
+*-save.kicad_pcb
+*-save.sch
+*.kicad_pcb-bck
+*.kicad_prl
+*.kicad_sch-prl
+
+# KiCad project backup files
+_autosave-*.kicad_pcb
+_autosave-*.kicad_sch
+
+# Directorios temporales
+fp-info-cache/
+__pycache__/
+
+##################################
+# Altium Designer
+##################################
+*.PrjPCBStructure
+*.PcbDocPreview
+*.ProjectLogs
+*.OutJob
+*.DRC
+*.ERC
+*.log
+*.rep
+*.VersionControl
+*.tmp
+
+##################################
+# Mastercam
+##################################
+*.mcam
+*.mcam-tools
+*.operations
+*.setupsheet
+*.nc
+*.nci
+*.pst
+*.psb
+*.control
+
+# Archivos CAM generados
+*.h
+*.txt
+*.xml
+
+##################################
+# Archivos CAD 3D comunes
+##################################
+*.step
+*.stp
+*.iges
+*.igs
+*.stl
+*.3mf
+*.obj
+
+##################################
+# Otros
+##################################
+.idea/
+*.iml
+*.class
