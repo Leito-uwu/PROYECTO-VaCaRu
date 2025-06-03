@@ -4,14 +4,14 @@
 const int stepsPerRevolution = 2048;
 const float diametroRuedaCm = 5.0;
 
-Stepper myStepper(stepsPerRevolution, 13, 12, 14, 27);
+Stepper myStepper(stepsPerRevolution, 13, 12, 14, 23);
 
 // pines tcs3200
 #define S0 32
 #define S1 33
 #define S2 25
 #define S3 26
-#define sensorOut 27
+#define sensorOut 19
 
 // pines fc-51
 #define PIN_SENSOR_IR 34
@@ -32,7 +32,6 @@ void configurarTCS() {
   digitalWrite(S0, HIGH);
   digitalWrite(S1, LOW);
 }
-
 // leer frecuencia de un color
 int leerColor(bool s2, bool s3) {
   digitalWrite(S2, s2);
@@ -40,7 +39,6 @@ int leerColor(bool s2, bool s3) {
   delay(100);
   return pulseIn(sensorOut, LOW);
 }
-
 // leer rojo verde azul
 void leerColores() {
   redFrequency = leerColor(LOW, LOW);
@@ -111,7 +109,6 @@ void loop() {
 
     // avanza 9 cm despues de detectar y leer color
     moverDistancia(9.0);
-    delay(2000);  // espera antes de volver a moverse
-  }
+    delay(2000);  // espera antes de volver a moverse
+  }
 }
-
