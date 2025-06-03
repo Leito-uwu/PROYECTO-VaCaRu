@@ -1,0 +1,3 @@
+**PCB 👨‍💻**
+
+Este apartado incluye los archivos necesarios para la fabricación y ensamblaje de la PCB del proyecto, como diseños en formato Gerber, esquemáticos, lista de materiales, archivos CAD y guías de ensamblaje de PCBs. Su objetivo es proporcionar toda la documentación requerida para replicar, modificar o mejorar el diseño original, asegurando una correcta integración del hardware con el sistema.
