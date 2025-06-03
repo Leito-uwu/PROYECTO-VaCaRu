@@ -1,0 +1,2 @@
+**PLANOS 🧑‍💻**
+Este apartado contiene los planos técnicos y diagramas de la cinta transportadora, el brazo robótico y el depósito de separación, incluyendo diseños CAD, esquemáticos, lista de materiales e instrucciones de ensamblaje. Su objetivo es proporcionar la información necesaria para la fabricación y optimización de estos componentes, asegurando su correcta funcionalidad dentro del sistema.
