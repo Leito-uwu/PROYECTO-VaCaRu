@@ -112,3 +112,7 @@ void loop() {
     delay(2000);  // espera antes de volver a moverse
   }
 }
+<<<<<<< HEAD
+=======
+// Fin de Programa
+>>>>>>> Carlos
