@@ -1,0 +1,379 @@
+#include <Wire.h> 
+#include <AccelStepper.h>
+#include <LiquidCrystal_I2C.h>
+#include <EEPROM.h>  // EEPROM para ESP32
+
+// LCD
+LiquidCrystal_I2C lcd(0x27, 16, 2);
+
+// Motor
+#define IN1 13
+#define IN2 12
+#define IN3 14
+#define IN4 23
+
+AccelStepper stepper(AccelStepper::FULL4WIRE, IN1, IN3, IN2, IN4);
+
+const int stepsPerRevolution = 2048;
+const float diametroRuedaCm = 6.0;
+
+// Sensor IR
+#define PIN_SENSOR_IR 34
+
+// Sensor TCS3200
+#define S0 32
+#define S1 33
+#define S2 25
+#define S3 26
+#define OUT_PIN 19
+
+// Botones
+#define BOTON_ROJO 2    // Emergencia
+#define BOTON_VERDE 4   // Inicio / Calibración
+
+// EEPROM addresses
+#define ADDR_RED 0
+#define ADDR_GREEN 4
+#define ADDR_BLUE 8
+
+unsigned long redFreq, greenFreq, blueFreq;
+unsigned long redRef = 0;
+unsigned long greenRef = 0;
+unsigned long blueRef = 0;
+
+const int numMuestras = 10;
+const byte I2C_ADDRESS = 0x08;
+
+int contadorBotellas = 0;
+bool sistemaIniciado = false;
+bool calibrando = false;
+bool emergenciaActiva = false;
+bool esperandoInicio = true;
+
+// Doble click variables
+unsigned long lastPressTime = 0;
+int pressCount = 0;
+const unsigned long doublePressDelay = 500; // 500ms para doble click
+
+const float recorridoEstandarCm = 23;
+const float recorridoAzulCm = 20.0;
+
+void configurarTCS() {
+  pinMode(S0, OUTPUT);
+  pinMode(S1, OUTPUT);
+  pinMode(S2, OUTPUT);
+  pinMode(S3, OUTPUT);
+  pinMode(OUT_PIN, INPUT);
+  digitalWrite(S0, HIGH); // 20% frecuencia
+  digitalWrite(S1, LOW);
+}
+
+// Función de filtro IIR para suavizar lecturas
+unsigned long iirFilter(bool s2, bool s3, float alpha = 0.2) {
+  digitalWrite(S2, s2);
+  digitalWrite(S3, s3);
+  delay(100); // estabilización
+  unsigned long y = 0;
+  for (int i = 0; i < numMuestras; i++) {
+    unsigned long lectura = pulseIn(OUT_PIN, LOW);
+    if (i == 0) {
+      y = lectura;
+    } else {
+      y = alpha * lectura + (1 - alpha) * y;
+    }
+    delay(50);
+  }
+  return y;
+}
+
+void esperarBotonVerde() {
+  while (digitalRead(BOTON_VERDE) == LOW);
+  delay(200);
+  while (digitalRead(BOTON_VERDE) == HIGH);
+  delay(200);
+}
+
+void guardarEnEEPROM() {
+  EEPROM.writeULong(ADDR_RED, redRef);
+  EEPROM.writeULong(ADDR_GREEN, greenRef);
+  EEPROM.writeULong(ADDR_BLUE, blueRef);
+  EEPROM.commit();
+  Serial.println("Calibración guardada en EEPROM");
+}
+
+void leerDesdeEEPROM() {
+  redRef = EEPROM.readULong(ADDR_RED);
+  greenRef = EEPROM.readULong(ADDR_GREEN);
+  blueRef = EEPROM.readULong(ADDR_BLUE);
+  Serial.println("Calibración cargada desde EEPROM:");
+  Serial.print("Rojo: "); Serial.println(redRef);
+  Serial.print("Verde: "); Serial.println(greenRef);
+  Serial.print("Azul: "); Serial.println(blueRef);
+}
+
+void calibrarColores() {
+  calibrando = true;
+
+  lcd.clear();
+  lcd.print("Color ROJO");
+  lcd.setCursor(0, 1);
+  lcd.print("Presione VERDE");
+  esperarBotonVerde();
+  lcd.clear();
+  lcd.print("Esperando...");
+  delay(3000);
+  redRef = iirFilter(LOW, LOW);
+
+  lcd.clear();
+  lcd.print("Color VERDE");
+  lcd.setCursor(0, 1);
+  lcd.print("Presione VERDE");
+  esperarBotonVerde();
+  lcd.clear();
+  lcd.print("Esperando...");
+  delay(3000);
+  greenRef = iirFilter(HIGH, HIGH);
+
+  lcd.clear();
+  lcd.print("Color AZUL");
+  lcd.setCursor(0, 1);
+  lcd.print("Presione VERDE");
+  esperarBotonVerde();
+  lcd.clear();
+  lcd.print("Esperando...");
+  delay(3000);
+  blueRef = iirFilter(LOW, HIGH);
+
+  lcd.clear();
+  lcd.print("Calibracion OK");
+  delay(1500);
+
+  guardarEnEEPROM();
+  calibrando = false;
+}
+
+int detectarColor() {
+  redFreq = iirFilter(LOW, LOW);       
+  greenFreq = iirFilter(HIGH, HIGH);   
+  blueFreq = iirFilter(LOW, HIGH);     
+
+  Serial.print("Filtrado ROJO: "); Serial.println(redFreq);
+  Serial.print("Filtrado VERDE: "); Serial.println(greenFreq);
+  Serial.print("Filtrado AZUL: "); Serial.println(blueFreq);
+
+  unsigned long diffRed = abs((long)redFreq - (long)redRef);
+  unsigned long diffGreen = abs((long)greenFreq - (long)greenRef);
+  unsigned long diffBlue = abs((long)blueFreq - (long)blueRef);
+
+  if (diffRed < diffGreen && diffRed < diffBlue) return 0; // ROJO
+  else if (diffBlue < diffRed && diffBlue < diffGreen) return 1; // AZUL
+  else if (diffGreen < diffRed && diffGreen < diffBlue) return 2; // VERDE
+  else return -1;
+}
+
+void configurarSensorIR() {
+  pinMode(PIN_SENSOR_IR, INPUT);
+}
+
+bool hayObjeto() {
+  return digitalRead(PIN_SENSOR_IR) == LOW;
+}
+
+int calcularPasos(float distanciaCm) {
+  float circunferencia = 3.1416 * diametroRuedaCm;
+  float distanciaPorPaso = circunferencia / stepsPerRevolution;
+  return distanciaCm / distanciaPorPaso;
+}
+
+enum EstadoMotor {
+  GIRANDO_NORMAL,
+  AVANZANDO_40CM,
+  LEYENDO_COLOR,
+  AVANZANDO_FINAL,
+  ENVIANDO_COLOR,
+  ESPERANDO_COMANDO
+};
+
+EstadoMotor estadoActual = GIRANDO_NORMAL;
+int colorDetectado = -1;
+
+void setup() {
+  Serial.begin(115200);
+  Wire.begin();
+  EEPROM.begin(32);
+  leerDesdeEEPROM();
+
+  configurarSensorIR();
+  configurarTCS();
+  lcd.init();
+  lcd.backlight();
+
+  pinMode(BOTON_ROJO, INPUT);    
+  pinMode(BOTON_VERDE, INPUT);  
+
+  lcd.clear();
+  lcd.print("Verde=Inicio/Calib");
+
+  stepper.setMaxSpeed(500);
+  stepper.setAcceleration(200);
+}
+
+void loop() {
+  unsigned long now = millis();
+  
+  if (esperandoInicio) {
+    if (digitalRead(BOTON_VERDE) == HIGH) {
+      if (now - lastPressTime < doublePressDelay) {
+        pressCount++;
+      } else {
+        pressCount = 1;
+      }
+      lastPressTime = now;
+      delay(300);
+    }
+
+    if (pressCount == 2) {
+      calibrarColores();
+      sistemaIniciado = true;
+      emergenciaActiva = false;
+      esperandoInicio = false;
+      lcd.clear();
+      lcd.print("Sistema Iniciado");
+      delay(1500);
+      lcd.clear();
+      lcd.print("Esperando objeto");
+      stepper.move(-1000000);
+      estadoActual = GIRANDO_NORMAL;
+      pressCount = 0;
+    } else if (pressCount == 1 && now - lastPressTime > doublePressDelay) {
+      sistemaIniciado = true;
+      emergenciaActiva = false;
+      esperandoInicio = false;
+      lcd.clear();
+      lcd.print("Sistema Iniciado");
+      delay(1500);
+      lcd.clear();
+      lcd.print("Esperando objeto");
+      stepper.move(-1000000);
+      estadoActual = GIRANDO_NORMAL;
+      pressCount = 0;
+    }
+    return;
+  }
+  
+  if (digitalRead(BOTON_ROJO) == HIGH && !emergenciaActiva && !calibrando) {
+    emergenciaActiva = true;
+    lcd.clear();
+    lcd.print("EMERGENCIA!");
+    lcd.setCursor(0, 1);
+    lcd.print("Sistema Detenido");
+    stepper.stop();
+
+    Wire.beginTransmission(I2C_ADDRESS);
+    Wire.write(3); // Valor 3 emergencia
+    Wire.endTransmission();
+
+    delay(500);
+  }
+
+  if (digitalRead(BOTON_VERDE) == HIGH && emergenciaActiva) {
+    emergenciaActiva = false;
+    lcd.clear();
+    lcd.print("Emergencia OFF");
+    lcd.setCursor(0, 1);
+    lcd.print("Reactivando...");
+
+    Wire.beginTransmission(I2C_ADDRESS);
+    Wire.write(4); // Valor 4 salida emergencia
+    Wire.endTransmission();
+
+    delay(2000);
+    lcd.clear();
+    lcd.print("Esperando objeto");
+    stepper.move(-1000000);
+    estadoActual = GIRANDO_NORMAL;
+  }
+
+  if (!sistemaIniciado || emergenciaActiva) {
+    return;
+  }
+
+  switch (estadoActual) {
+    case GIRANDO_NORMAL:
+      if (hayObjeto()) {
+        lcd.clear();
+        lcd.print("Objeto Detectado");
+        stepper.stop();
+        while (stepper.isRunning()) {
+          stepper.run();
+        }
+
+        lcd.clear();
+        lcd.print("Avanzando 40cm");
+        int pasos40cm = -calcularPasos(36);
+        stepper.move(pasos40cm);
+        estadoActual = AVANZANDO_40CM;
+      }
+      break;
+
+    case AVANZANDO_40CM:
+      if (stepper.distanceToGo() == 0) {
+        lcd.clear();
+        lcd.print("Detectando Color");
+        colorDetectado = detectarColor();
+        lcd.setCursor(0, 1);
+        if (colorDetectado == 0) lcd.print("Color: ROJO");
+        else if (colorDetectado == 1) lcd.print("Color: AZUL");
+        else if (colorDetectado == 2) lcd.print("Color: VERDE");
+        else lcd.print("Color: ???");
+
+        delay(1500);
+
+        lcd.clear();
+        lcd.print("Avanzando final");
+
+        float distanciaFinal = (colorDetectado == 1) ? recorridoAzulCm : recorridoEstandarCm;
+        int pasosFinal = -calcularPasos(distanciaFinal);
+        stepper.move(pasosFinal);
+        estadoActual = AVANZANDO_FINAL;
+      }
+      break;
+
+    case AVANZANDO_FINAL:
+      if (stepper.distanceToGo() == 0) {
+        lcd.clear();
+        lcd.print("Brazo agarrando");
+
+        contadorBotellas++;
+        lcd.setCursor(0, 1);
+        lcd.print("Botellas: ");
+        lcd.print(contadorBotellas);
+
+        delay(2000);
+        estadoActual = ENVIANDO_COLOR;
+      }
+      break;
+
+    case ENVIANDO_COLOR:
+      Wire.beginTransmission(I2C_ADDRESS);
+      Wire.write(colorDetectado);
+      Wire.endTransmission();
+      estadoActual = ESPERANDO_COMANDO;
+      break;
+
+    case ESPERANDO_COMANDO:
+      Wire.requestFrom(I2C_ADDRESS, 1);
+      if (Wire.available()) {
+        byte comando = Wire.read();
+        if (comando == 1) {
+          lcd.clear();
+          lcd.print("Esperando objeto");
+          stepper.move(-1000000);
+          estadoActual = GIRANDO_NORMAL;
+        }
+      }
+      break;
+  }
+
+  stepper.run();
+}
